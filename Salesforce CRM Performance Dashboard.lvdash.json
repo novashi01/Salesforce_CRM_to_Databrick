@@ -83,13 +83,13 @@
           },
           "frame" : {
             "showTitle" : true,
-            "title" : "Sales Opportunity Stage "
+            "title" : "Current Pipeline Stage Distribution"
           }
         }
       },
       "position" : {
         "x" : 1,
-        "y" : 2,
+        "y" : 1,
         "width" : 2,
         "height" : 6
       }
@@ -119,14 +119,14 @@
               "scale" : {
                 "type" : "temporal"
               },
-              "displayName" : "close_month"
+              "displayName" : "Month (Year)"
             },
             "y" : {
               "fieldName" : "sum(count_closed_won_opportunities)",
               "scale" : {
                 "type" : "quantitative"
               },
-              "displayName" : "Sum of count_closed_won_opportunities"
+              "displayName" : "Won Deals Count"
             }
           },
           "frame" : {
@@ -167,7 +167,7 @@
       },
       "position" : {
         "x" : 3,
-        "y" : 3,
+        "y" : 2,
         "width" : 3,
         "height" : 6
       }
@@ -201,11 +201,14 @@
               },
               "fields" : [ {
                 "fieldName" : "sum(total_won_opportunities)",
-                "displayName" : "Sum of total_won_opportunities"
+                "displayName" : "Sum of Won"
               }, {
                 "fieldName" : "sum(total_closed_opportunities)",
-                "displayName" : "Sum of total_closed_opportunities"
-              } ]
+                "displayName" : "Sum of Closed"
+              } ],
+              "axis" : {
+                "title" : "Number of Closed Deals"
+              }
             },
             "y" : {
               "fieldName" : "owner_full_name",
@@ -215,18 +218,18 @@
                   "by" : "x-reversed"
                 }
               },
-              "displayName" : "owner_full_name"
+              "displayName" : "Salesperson Name"
             }
           },
           "frame" : {
-            "title" : "Total won and closed opportunities by owner",
+            "title" : "Won vs. Total Closed Deals by Owner (Count)",
             "showTitle" : true
           }
         }
       },
       "position" : {
         "x" : 0,
-        "y" : 8,
+        "y" : 7,
         "width" : 3,
         "height" : 7
       }
@@ -267,22 +270,25 @@
               },
               "fields" : [ {
                 "fieldName" : "avg(count_converted_leads)",
-                "displayName" : "Average count_converted_leads"
+                "displayName" : "Leads Converted"
               }, {
                 "fieldName" : "avg(count_created_leads)",
-                "displayName" : "Average count_created_leads"
-              } ]
+                "displayName" : "Leads Created"
+              } ],
+              "axis" : {
+                "title" : "Number of Leads"
+              }
             }
           },
           "frame" : {
-            "title" : "Monthly Converted Leads",
+            "title" : "Monthly Lead Creation vs. Conversion",
             "showTitle" : true
           }
         }
       },
       "position" : {
         "x" : 3,
-        "y" : 9,
+        "y" : 8,
         "width" : 3,
         "height" : 6
       }
@@ -349,26 +355,26 @@
           },
           "frame" : {
             "showTitle" : true,
-            "title" : ""
+            "title" : "Filter by Time Period"
           }
         }
       },
       "position" : {
         "x" : 3,
-        "y" : 2,
+        "y" : 1,
         "width" : 3,
         "height" : 1
       }
     }, {
       "widget" : {
         "name" : "1c52f872",
-        "textbox_spec" : ""
+        "textbox_spec" : "#Sales Funnel Performance Dashboard#\nProvides a comprehensive overview of the sales funnel performance, tracking key metrics from lead generation through to opportunity closure. Analyze pipeline stages, conversion trends, monthly wins, and performance by sales owner, using data sourced from Salesforce CRM. Use the date filters to adjust the reporting period."
       },
       "position" : {
         "x" : 0,
         "y" : 0,
         "width" : 6,
-        "height" : 2
+        "height" : 1
       }
     }, {
       "widget" : {
@@ -395,13 +401,13 @@
           },
           "frame" : {
             "showTitle" : true,
-            "title" : "Total Closed Won Opportunity\n"
+            "title" : "Total Won Opportunities\n"
           }
         }
       },
       "position" : {
         "x" : 0,
-        "y" : 6,
+        "y" : 5,
         "width" : 1,
         "height" : 2
       }
@@ -430,13 +436,13 @@
           },
           "frame" : {
             "showTitle" : true,
-            "title" : "Total Converted lead\n"
+            "title" : "Total Leads Converted\n"
           }
         }
       },
       "position" : {
         "x" : 0,
-        "y" : 4,
+        "y" : 3,
         "width" : 1,
         "height" : 2
       }
@@ -465,13 +471,13 @@
           },
           "frame" : {
             "showTitle" : true,
-            "title" : "Total Created lead\n"
+            "title" : "Total Leads Created\n"
           }
         }
       },
       "position" : {
         "x" : 0,
-        "y" : 2,
+        "y" : 1,
         "width" : 1,
         "height" : 2
       }
