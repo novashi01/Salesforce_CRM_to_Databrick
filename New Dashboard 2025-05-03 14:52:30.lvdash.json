@@ -1,0 +1,911 @@
+{
+  "datasets" : [ {
+    "name" : "299466e2",
+    "displayName" : "gold_opportunity_snapshot",
+    "query" : "SELECT\n    stage_name,\n    COUNT(opportunity_id) AS number_of_opportunities\nFROM aitest.crm_silver.gold_opportunity_snapshot\nWHERE is_closed = false \nGROUP BY stage_name\nORDER BY\n    CASE stage_name\n        WHEN 'Funnel' THEN 1\n        WHEN 'Qualified Opportunity' THEN 2\n        WHEN 'Customer Assessment w/ Favorable Evaluation' THEN 3\n        WHEN 'Quoted Funnel' THEN 4\n        WHEN 'Order Expected within 90 Days' THEN 5 \n        WHEN 'Decision to Purchase' THEN 6\n        WHEN 'Procurement Pending - <30 Days' THEN 7\n        WHEN 'Order Expected within 30 Days' THEN 8\n        WHEN 'Commit' THEN 9 \n        WHEN 'Upside' THEN 10 \n        ELSE 99 \n    END;\n\n\n"
+  }, {
+    "name" : "643ec542",
+    "displayName" : "Sum of Closed Won amount",
+    "query" : "SELECT\n    close_month,\n    count_closed_won_opportunities\nFROM aitest.crm_silver.gold_sales_pipeline_agg\nWHERE close_month IS NOT NULL\nAND close_month >= '2015-10-01' AND close_month <= '2022-01-31'\nORDER BY close_month ASC;"
+  }, {
+    "name" : "32b9b149",
+    "displayName" : "gold_lead_source_agg",
+    "query" : "SELECT creation_month FROM aitest.crm_silver.gold_lead_source_agg\nwhere creation_month is not null"
+  }, {
+    "name" : "fa7222ec",
+    "displayName" : "avg_win_rate_by_count_per_month_percentage",
+    "query" : "SELECT\n    owner_full_name,\n    SUM(count_closed_won_opportunities) AS total_won_opportunities,\n    SUM(count_total_closed_opportunities) AS total_closed_opportunities,\n    ROUND(AVG(win_rate_by_count) * 100, 2) AS avg_win_rate_by_count_per_month_percentage\nFROM aitest.crm_silver.gold_sales_pipeline_agg\nWHERE close_month >= DATE_SUB('2022-01-01', 365)\nGROUP BY owner_full_name\nORDER BY total_won_opportunities DESC;"
+  }, {
+    "name" : "7d249642",
+    "displayName" : "created_converted_count",
+    "query" : "SELECT\n    creation_month,\n    count_created_leads,\n    count_converted_leads\nFROM aitest.crm_silver.gold_lead_source_agg\nWHERE creation_month IS NOT NULL\nAND creation_month >= '2018-10-01' AND creation_month <= '2022-01-31'\nORDER BY creation_month ASC;"
+  }, {
+    "name" : "92e7e55b",
+    "displayName" : "manager_won_revenue_monthly",
+    "query" : "SELECT\n    close_month AS revenue_month,\n    COALESCE(owner_manager_full_name, 'No Manager Assigned / Direct') AS manager_name,\n    COALESCE(account_industry, 'Unknown Industry') AS customer_industry,\n    SUM(sum_closed_won_amount) AS monthly_won_revenue\nFROM\n    aitest.crm_silver.gold_sales_pipeline_agg\nGROUP BY\n    revenue_month,\n    manager_name,\n    customer_industry\nHAVING\n    monthly_won_revenue IS NOT NULL AND monthly_won_revenue != 0\nORDER BY\n    revenue_month DESC,\n    manager_name,\n    customer_industry;"
+  }, {
+    "name" : "9ed9dbc7",
+    "displayName" : "Monthly Revenue by Manager and Industry",
+    "query" : "SELECT\n    DATE_TRUNC('MONTH', close_date) AS revenue_month,\n    -- Handle potential NULL manager names\n    COALESCE(owner_manager_full_name, 'No Manager Assigned / Direct') AS manager_name,\n    -- Handle potential NULL industry names\n    COALESCE(account_industry, 'Unknown Industry') AS customer_industry,\n    SUM(amount) AS monthly_won_revenue -- Sum amount directly for won opportunities\nFROM\n    aitest.crm_silver.gold_opportunity_snapshot\nWHERE\n    is_won = true -- Filter specifically for won opportunities\n-- Optional: Filter for a specific time range\n-- AND close_date >= date_sub(current_date(), 365) -- Example: Last 365 days\nGROUP BY\n    revenue_month,\n    manager_name,\n    customer_industry\nORDER BY\n    revenue_month DESC,\n    manager_name,\n    customer_industry;"
+  }, {
+    "name" : "08b6817e",
+    "displayName" : "Monthly Revenue and Opportunities by Country",
+    "query" : "WITH ranked_countries AS (\n    SELECT\n        DATE_TRUNC('MONTH', close_date) AS revenue_month,\n        COALESCE(owner_full_name, 'Unknown Owner') AS owner_name,\n        COALESCE(owner_manager_full_name, 'No Manager / Direct') AS manager_name,\n        COALESCE(UPPER(account_billing_country), 'UNKNOWN COUNTRY') AS customer_country,\n        COALESCE(account_industry, 'Unknown Industry') AS customer_industry,\n        COALESCE(opportunity_type, 'Unknown Type') AS opportunity_type,\n        COALESCE(opportunity_lead_source, 'Unknown Source') AS lead_source,\n        COALESCE(account_type, 'Unknown Type') AS customer_type,\n        SUM(amount) AS total_monthly_won_revenue,\n        COUNT(DISTINCT opportunity_id) AS count_won_deals,\n        ROUND(AVG(amount), 2) AS average_won_deal_size,\n        ROUND(AVG(sales_cycle_days), 1) AS average_sales_cycle_days_won,\n        ROW_NUMBER() OVER (PARTITION BY DATE_TRUNC('MONTH', close_date) ORDER BY SUM(amount) DESC) AS country_rank\n    FROM\n        aitest.crm_silver.gold_opportunity_snapshot\n    WHERE\n        is_won = true\n    GROUP BY\n        revenue_month,\n        owner_name,\n        manager_name,\n        customer_country,\n        customer_industry,\n        opportunity_type,\n        lead_source,\n        customer_type\n)\nSELECT\n    revenue_month,\n    owner_name,\n    manager_name,\n    customer_country,\n    customer_industry,\n    opportunity_type,\n    lead_source,\n    customer_type,\n    total_monthly_won_revenue,\n    count_won_deals,\n    average_won_deal_size,\n    average_sales_cycle_days_won\nFROM\n    ranked_countries\nWHERE\n    country_rank <= 5\nORDER BY\n    revenue_month DESC,\n    manager_name,\n    owner_name,\n    total_monthly_won_revenue DESC;"
+  }, {
+    "name" : "08e661fc",
+    "displayName" : "Monthly Product Sales and Revenue Analysis",
+    "query" : "SELECT\n    DATE_TRUNC('MONTH', so.close_date) AS sale_month,\n    COALESCE(sop.product_name_at_sale, 'Unknown Product') AS product_name,\n    SUM(sop.total_price) AS monthly_product_revenue, -- Sum of the total price for each line item of this product\n    COUNT(*) AS count_sales_transactions, -- How many times this product appeared on won deals this month\n    SUM(sop.quantity) AS total_quantity_sold -- Total quantity of this product sold this month\nFROM\n    aitest.crm_silver.silver_opportunity_product sop -- Start with the line item table\nINNER JOIN\n    aitest.crm_silver.silver_opportunity so ON sop.opportunity_id = so.opportunity_id -- Join to get opportunity details\nWHERE\n    so.is_won = true -- Only include products from WON opportunities\n    AND sop.is_deleted = false -- Exclude deleted line items\n-- Optional: Filter for a specific time period based on opportunity close date\n-- AND so.close_date >= date_trunc('MONTH', date_sub(current_date(), 365))\n-- AND so.close_date < date_trunc('MONTH', current_date()) -- Example: Last 12 full months\nGROUP BY\n    sale_month,\n    product_name\nORDER BY\n    sale_month DESC, -- Show recent months first\n    monthly_product_revenue DESC; -- Show top-selling products first within each month"
+  } ],
+  "pages" : [ {
+    "name" : "f93acf03",
+    "displayName" : "Untitled page",
+    "layout" : [ {
+      "widget" : {
+        "name" : "da04ffc2",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "299466e2",
+            "fields" : [ {
+              "name" : "sum(number_of_opportunities)",
+              "expression" : "SUM(`number_of_opportunities`)"
+            }, {
+              "name" : "stage_name",
+              "expression" : "`stage_name`"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 3,
+          "widgetType" : "bar",
+          "encodings" : {
+            "x" : {
+              "fieldName" : "sum(number_of_opportunities)",
+              "scale" : {
+                "type" : "quantitative"
+              },
+              "displayName" : "Sum of Opportunities"
+            },
+            "y" : {
+              "fieldName" : "stage_name",
+              "scale" : {
+                "type" : "categorical",
+                "sort" : {
+                  "by" : "x-reversed"
+                }
+              },
+              "displayName" : "Stage Name"
+            },
+            "label" : {
+              "show" : true
+            }
+          },
+          "frame" : {
+            "showTitle" : true,
+            "title" : "Sales Opportunity Stage "
+          }
+        }
+      },
+      "position" : {
+        "x" : 1,
+        "y" : 2,
+        "width" : 2,
+        "height" : 6
+      }
+    }, {
+      "widget" : {
+        "name" : "d783063f",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "643ec542",
+            "fields" : [ {
+              "name" : "monthly(close_month)",
+              "expression" : "DATE_TRUNC(\"MONTH\", `close_month`)"
+            }, {
+              "name" : "sum(count_closed_won_opportunities)",
+              "expression" : "SUM(`count_closed_won_opportunities`)"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 3,
+          "widgetType" : "bar",
+          "encodings" : {
+            "x" : {
+              "fieldName" : "monthly(close_month)",
+              "scale" : {
+                "type" : "temporal"
+              },
+              "displayName" : "close_month"
+            },
+            "y" : {
+              "fieldName" : "sum(count_closed_won_opportunities)",
+              "scale" : {
+                "type" : "quantitative"
+              },
+              "displayName" : "Sum of count_closed_won_opportunities"
+            }
+          },
+          "frame" : {
+            "title" : "Monthly Closed Won Opportunities",
+            "showTitle" : true
+          },
+          "mark" : {
+            "colors" : [ "#FFAB00", {
+              "themeColorType" : "visualizationColors",
+              "position" : 2
+            }, {
+              "themeColorType" : "visualizationColors",
+              "position" : 3
+            }, {
+              "themeColorType" : "visualizationColors",
+              "position" : 4
+            }, {
+              "themeColorType" : "visualizationColors",
+              "position" : 5
+            }, {
+              "themeColorType" : "visualizationColors",
+              "position" : 6
+            }, {
+              "themeColorType" : "visualizationColors",
+              "position" : 7
+            }, {
+              "themeColorType" : "visualizationColors",
+              "position" : 8
+            }, {
+              "themeColorType" : "visualizationColors",
+              "position" : 9
+            }, {
+              "themeColorType" : "visualizationColors",
+              "position" : 10
+            } ]
+          }
+        }
+      },
+      "position" : {
+        "x" : 3,
+        "y" : 3,
+        "width" : 3,
+        "height" : 6
+      }
+    }, {
+      "widget" : {
+        "name" : "903362af",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "fa7222ec",
+            "fields" : [ {
+              "name" : "sum(total_won_opportunities)",
+              "expression" : "SUM(`total_won_opportunities`)"
+            }, {
+              "name" : "sum(total_closed_opportunities)",
+              "expression" : "SUM(`total_closed_opportunities`)"
+            }, {
+              "name" : "owner_full_name",
+              "expression" : "`owner_full_name`"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 3,
+          "widgetType" : "bar",
+          "encodings" : {
+            "x" : {
+              "scale" : {
+                "type" : "quantitative"
+              },
+              "fields" : [ {
+                "fieldName" : "sum(total_won_opportunities)",
+                "displayName" : "Sum of total_won_opportunities"
+              }, {
+                "fieldName" : "sum(total_closed_opportunities)",
+                "displayName" : "Sum of total_closed_opportunities"
+              } ]
+            },
+            "y" : {
+              "fieldName" : "owner_full_name",
+              "scale" : {
+                "type" : "categorical",
+                "sort" : {
+                  "by" : "x-reversed"
+                }
+              },
+              "displayName" : "owner_full_name"
+            }
+          },
+          "frame" : {
+            "title" : "Total won and closed opportunities by owner",
+            "showTitle" : true
+          }
+        }
+      },
+      "position" : {
+        "x" : 0,
+        "y" : 8,
+        "width" : 3,
+        "height" : 7
+      }
+    }, {
+      "widget" : {
+        "name" : "6650afbf",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "7d249642",
+            "fields" : [ {
+              "name" : "monthly(creation_month)",
+              "expression" : "DATE_TRUNC(\"MONTH\", `creation_month`)"
+            }, {
+              "name" : "avg(count_converted_leads)",
+              "expression" : "AVG(`count_converted_leads`)"
+            }, {
+              "name" : "avg(count_created_leads)",
+              "expression" : "AVG(`count_created_leads`)"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 3,
+          "widgetType" : "line",
+          "encodings" : {
+            "x" : {
+              "fieldName" : "monthly(creation_month)",
+              "scale" : {
+                "type" : "temporal"
+              },
+              "displayName" : "creation_month"
+            },
+            "y" : {
+              "scale" : {
+                "type" : "quantitative"
+              },
+              "fields" : [ {
+                "fieldName" : "avg(count_converted_leads)",
+                "displayName" : "Average count_converted_leads"
+              }, {
+                "fieldName" : "avg(count_created_leads)",
+                "displayName" : "Average count_created_leads"
+              } ]
+            }
+          },
+          "frame" : {
+            "title" : "Monthly Converted Leads",
+            "showTitle" : true
+          }
+        }
+      },
+      "position" : {
+        "x" : 3,
+        "y" : 9,
+        "width" : 3,
+        "height" : 6
+      }
+    }, {
+      "widget" : {
+        "name" : "c5220266",
+        "queries" : [ {
+          "name" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f02869ab3915fbac91d3be62662b6e_yearly(close_month)",
+          "query" : {
+            "datasetName" : "643ec542",
+            "fields" : [ {
+              "name" : "yearly(close_month)",
+              "expression" : "DATE_TRUNC(\"YEAR\", `close_month`)"
+            }, {
+              "name" : "yearly(close_month)_associativity",
+              "expression" : "COUNT_IF(`associative_filter_predicate_group`)"
+            } ],
+            "disaggregated" : false
+          }
+        }, {
+          "name" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f0286ccbcf15e9a32f04075ba988cb_yearly(creation_month)",
+          "query" : {
+            "datasetName" : "32b9b149",
+            "fields" : [ {
+              "name" : "yearly(creation_month)",
+              "expression" : "DATE_TRUNC(\"YEAR\", `creation_month`)"
+            }, {
+              "name" : "yearly(creation_month)_associativity",
+              "expression" : "COUNT_IF(`associative_filter_predicate_group`)"
+            } ],
+            "disaggregated" : false
+          }
+        }, {
+          "name" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f0289d97871d7992fb7d1c79a8deba_yearly(creation_month)",
+          "query" : {
+            "datasetName" : "7d249642",
+            "fields" : [ {
+              "name" : "yearly(creation_month)",
+              "expression" : "DATE_TRUNC(\"YEAR\", `creation_month`)"
+            }, {
+              "name" : "yearly(creation_month)_associativity",
+              "expression" : "COUNT_IF(`associative_filter_predicate_group`)"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 2,
+          "widgetType" : "filter-date-range-picker",
+          "encodings" : {
+            "fields" : [ {
+              "fieldName" : "yearly(close_month)",
+              "displayName" : "close_month",
+              "queryName" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f02869ab3915fbac91d3be62662b6e_yearly(close_month)"
+            }, {
+              "fieldName" : "yearly(creation_month)",
+              "displayName" : "creation_month",
+              "queryName" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f0286ccbcf15e9a32f04075ba988cb_yearly(creation_month)"
+            }, {
+              "fieldName" : "yearly(creation_month)",
+              "displayName" : "creation_month",
+              "queryName" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f0289d97871d7992fb7d1c79a8deba_yearly(creation_month)"
+            } ]
+          },
+          "frame" : {
+            "showTitle" : true,
+            "title" : ""
+          }
+        }
+      },
+      "position" : {
+        "x" : 3,
+        "y" : 2,
+        "width" : 3,
+        "height" : 1
+      }
+    }, {
+      "widget" : {
+        "name" : "1c52f872",
+        "textbox_spec" : ""
+      },
+      "position" : {
+        "x" : 0,
+        "y" : 0,
+        "width" : 6,
+        "height" : 2
+      }
+    }, {
+      "widget" : {
+        "name" : "4ab5ce87",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "643ec542",
+            "fields" : [ {
+              "name" : "sum(count_closed_won_opportunities)",
+              "expression" : "SUM(`count_closed_won_opportunities`)"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 2,
+          "widgetType" : "counter",
+          "encodings" : {
+            "value" : {
+              "fieldName" : "sum(count_closed_won_opportunities)",
+              "displayName" : "Sum of count_closed_won_opportunities"
+            }
+          },
+          "frame" : {
+            "showTitle" : true,
+            "title" : "Total Closed Won Opportunity\n"
+          }
+        }
+      },
+      "position" : {
+        "x" : 0,
+        "y" : 6,
+        "width" : 1,
+        "height" : 2
+      }
+    }, {
+      "widget" : {
+        "name" : "59f1f23d",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "7d249642",
+            "fields" : [ {
+              "name" : "sum(count_converted_leads)",
+              "expression" : "SUM(`count_converted_leads`)"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 2,
+          "widgetType" : "counter",
+          "encodings" : {
+            "value" : {
+              "fieldName" : "sum(count_converted_leads)",
+              "displayName" : "Sum of count_converted_leads"
+            }
+          },
+          "frame" : {
+            "showTitle" : true,
+            "title" : "Total Converted lead\n"
+          }
+        }
+      },
+      "position" : {
+        "x" : 0,
+        "y" : 4,
+        "width" : 1,
+        "height" : 2
+      }
+    }, {
+      "widget" : {
+        "name" : "fee628ad",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "7d249642",
+            "fields" : [ {
+              "name" : "sum(count_created_leads)",
+              "expression" : "SUM(`count_created_leads`)"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 2,
+          "widgetType" : "counter",
+          "encodings" : {
+            "value" : {
+              "fieldName" : "sum(count_created_leads)",
+              "displayName" : "Sum of count_created_leads"
+            }
+          },
+          "frame" : {
+            "showTitle" : true,
+            "title" : "Total Created lead\n"
+          }
+        }
+      },
+      "position" : {
+        "x" : 0,
+        "y" : 2,
+        "width" : 1,
+        "height" : 2
+      }
+    } ]
+  }, {
+    "name" : "43714864",
+    "displayName" : "Sales Performance Overview",
+    "layout" : [ {
+      "widget" : {
+        "name" : "a5649fee",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "92e7e55b",
+            "fields" : [ {
+              "name" : "manager_name",
+              "expression" : "`manager_name`"
+            }, {
+              "name" : "monthly(revenue_month)",
+              "expression" : "DATE_TRUNC(\"MONTH\", `revenue_month`)"
+            }, {
+              "name" : "sum(monthly_won_revenue)",
+              "expression" : "SUM(`monthly_won_revenue`)"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 3,
+          "widgetType" : "bar",
+          "encodings" : {
+            "x" : {
+              "fieldName" : "monthly(revenue_month)",
+              "scale" : {
+                "type" : "temporal"
+              },
+              "displayName" : "Month (Won, Year)"
+            },
+            "y" : {
+              "fieldName" : "sum(monthly_won_revenue)",
+              "scale" : {
+                "type" : "quantitative"
+              },
+              "displayName" : "Won Revenue ($)"
+            },
+            "color" : {
+              "fieldName" : "manager_name",
+              "scale" : {
+                "type" : "categorical"
+              },
+              "displayName" : "Manager Name"
+            }
+          },
+          "frame" : {
+            "title" : "Team Performance by Manager",
+            "showTitle" : true
+          }
+        }
+      },
+      "position" : {
+        "x" : 3,
+        "y" : 1,
+        "width" : 3,
+        "height" : 6
+      }
+    }, {
+      "widget" : {
+        "name" : "1c660914",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "9ed9dbc7",
+            "fields" : [ {
+              "name" : "sum(monthly_won_revenue)",
+              "expression" : "SUM(`monthly_won_revenue`)"
+            }, {
+              "name" : "customer_industry",
+              "expression" : "`customer_industry`"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 3,
+          "widgetType" : "pie",
+          "encodings" : {
+            "angle" : {
+              "fieldName" : "sum(monthly_won_revenue)",
+              "scale" : {
+                "type" : "quantitative"
+              },
+              "displayName" : "By Select Years"
+            },
+            "color" : {
+              "fieldName" : "customer_industry",
+              "scale" : {
+                "type" : "categorical"
+              },
+              "displayName" : "Customer Industry"
+            }
+          },
+          "frame" : {
+            "title" : "Sales Revenue by Industry Segment",
+            "showTitle" : true
+          }
+        }
+      },
+      "position" : {
+        "x" : 1,
+        "y" : 0,
+        "width" : 2,
+        "height" : 6
+      }
+    }, {
+      "widget" : {
+        "name" : "a050099f",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "08e661fc",
+            "fields" : [ {
+              "name" : "product_name",
+              "expression" : "`product_name`"
+            }, {
+              "name" : "sum(monthly_product_revenue)",
+              "expression" : "SUM(`monthly_product_revenue`)"
+            }, {
+              "name" : "monthly(sale_month)",
+              "expression" : "DATE_TRUNC(\"MONTH\", `sale_month`)"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 3,
+          "widgetType" : "bar",
+          "encodings" : {
+            "x" : {
+              "fieldName" : "sum(monthly_product_revenue)",
+              "scale" : {
+                "type" : "quantitative"
+              },
+              "displayName" : "Product Revenue"
+            },
+            "y" : {
+              "fieldName" : "monthly(sale_month)",
+              "scale" : {
+                "type" : "temporal"
+              },
+              "displayName" : "Month (Year)"
+            },
+            "color" : {
+              "fieldName" : "product_name",
+              "scale" : {
+                "type" : "categorical"
+              },
+              "displayName" : "Product Name"
+            }
+          },
+          "frame" : {
+            "showTitle" : true,
+            "title" : "Product Contribution to Monthly Revenue"
+          }
+        }
+      },
+      "position" : {
+        "x" : 0,
+        "y" : 6,
+        "width" : 3,
+        "height" : 8
+      }
+    }, {
+      "widget" : {
+        "name" : "8b8bba46",
+        "queries" : [ {
+          "name" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f02939fa7e171ebbf23812489a67c9_yearly(sale_month)",
+          "query" : {
+            "datasetName" : "08e661fc",
+            "fields" : [ {
+              "name" : "yearly(sale_month)",
+              "expression" : "DATE_TRUNC(\"YEAR\", `sale_month`)"
+            }, {
+              "name" : "yearly(sale_month)_associativity",
+              "expression" : "COUNT_IF(`associative_filter_predicate_group`)"
+            } ],
+            "disaggregated" : false
+          }
+        }, {
+          "name" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f0293827f91b51a43bb3c98a8400de_yearly(revenue_month)",
+          "query" : {
+            "datasetName" : "08b6817e",
+            "fields" : [ {
+              "name" : "yearly(revenue_month)",
+              "expression" : "DATE_TRUNC(\"YEAR\", `revenue_month`)"
+            }, {
+              "name" : "yearly(revenue_month)_associativity",
+              "expression" : "COUNT_IF(`associative_filter_predicate_group`)"
+            } ],
+            "disaggregated" : false
+          }
+        }, {
+          "name" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f02935fc1f1e67a642ce6ac94a1c63_yearly(revenue_month)",
+          "query" : {
+            "datasetName" : "92e7e55b",
+            "fields" : [ {
+              "name" : "yearly(revenue_month)",
+              "expression" : "DATE_TRUNC(\"YEAR\", `revenue_month`)"
+            }, {
+              "name" : "yearly(revenue_month)_associativity",
+              "expression" : "COUNT_IF(`associative_filter_predicate_group`)"
+            } ],
+            "disaggregated" : false
+          }
+        }, {
+          "name" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f029373e2c113caa9ab1720b9f52be_yearly(revenue_month)",
+          "query" : {
+            "datasetName" : "9ed9dbc7",
+            "fields" : [ {
+              "name" : "yearly(revenue_month)",
+              "expression" : "DATE_TRUNC(\"YEAR\", `revenue_month`)"
+            }, {
+              "name" : "yearly(revenue_month)_associativity",
+              "expression" : "COUNT_IF(`associative_filter_predicate_group`)"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 2,
+          "widgetType" : "filter-multi-select",
+          "encodings" : {
+            "fields" : [ {
+              "fieldName" : "yearly(sale_month)",
+              "displayName" : "sale_month",
+              "queryName" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f02939fa7e171ebbf23812489a67c9_yearly(sale_month)"
+            }, {
+              "fieldName" : "yearly(revenue_month)",
+              "displayName" : "revenue_month",
+              "queryName" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f0293827f91b51a43bb3c98a8400de_yearly(revenue_month)"
+            }, {
+              "fieldName" : "yearly(revenue_month)",
+              "displayName" : "revenue_month",
+              "queryName" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f02935fc1f1e67a642ce6ac94a1c63_yearly(revenue_month)"
+            }, {
+              "fieldName" : "yearly(revenue_month)",
+              "displayName" : "revenue_month",
+              "queryName" : "dashboards/01f027c9a7b614dca0507c63d57c1905/datasets/01f029373e2c113caa9ab1720b9f52be_yearly(revenue_month)"
+            } ]
+          },
+          "frame" : {
+            "showTitle" : true,
+            "title" : "Filter by Year(s)",
+            "showDescription" : false
+          }
+        }
+      },
+      "position" : {
+        "x" : 3,
+        "y" : 0,
+        "width" : 3,
+        "height" : 1
+      }
+    }, {
+      "widget" : {
+        "name" : "b9b1b934",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "08b6817e",
+            "fields" : [ {
+              "name" : "owner_name",
+              "expression" : "`owner_name`"
+            }, {
+              "name" : "monthly(revenue_month)",
+              "expression" : "DATE_TRUNC(\"MONTH\", `revenue_month`)"
+            }, {
+              "name" : "sum(count_won_deals)",
+              "expression" : "SUM(`count_won_deals`)"
+            } ],
+            "cubeGroupingSets" : {
+              "sets" : [ {
+                "fieldNames" : [ "owner_name" ]
+              }, {
+                "fieldNames" : [ "monthly(revenue_month)" ]
+              } ]
+            },
+            "disaggregated" : false,
+            "orders" : [ {
+              "direction" : "ASC",
+              "expression" : "`owner_name`"
+            }, {
+              "direction" : "ASC",
+              "expression" : "DATE_TRUNC(\"MONTH\", `revenue_month`)"
+            } ]
+          }
+        } ],
+        "spec" : {
+          "version" : 3,
+          "widgetType" : "pivot",
+          "encodings" : {
+            "rows" : [ {
+              "fieldName" : "owner_name",
+              "displayName" : "Salesperson Name"
+            } ],
+            "columns" : [ {
+              "fieldName" : "monthly(revenue_month)",
+              "displayTotal" : false,
+              "format" : {
+                "type" : "date-time",
+                "date" : "locale-short-month",
+                "time" : "locale-hour-minute",
+                "leadingZeros" : true
+              },
+              "displayName" : "Month (Year)"
+            } ],
+            "cell" : {
+              "type" : "multi-cell",
+              "fields" : [ {
+                "fieldName" : "sum(count_won_deals)",
+                "cellType" : "text",
+                "displayName" : "Won deals  "
+              } ]
+            }
+          },
+          "frame" : {
+            "title" : "Salesperson Deal Count by Month",
+            "showTitle" : true
+          }
+        }
+      },
+      "position" : {
+        "x" : 3,
+        "y" : 7,
+        "width" : 3,
+        "height" : 7
+      }
+    }, {
+      "widget" : {
+        "name" : "912982e4",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "08e661fc",
+            "fields" : [ {
+              "name" : "countdistinct(product_name)",
+              "expression" : "COUNT(DISTINCT `product_name`)"
+            }, {
+              "name" : "sum(total_quantity_sold)",
+              "expression" : "SUM(`total_quantity_sold`)"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 2,
+          "widgetType" : "counter",
+          "encodings" : {
+            "value" : {
+              "fieldName" : "sum(total_quantity_sold)",
+              "displayName" : "Sum of total_quantity_sold"
+            },
+            "target" : {
+              "fieldName" : "countdistinct(product_name)",
+              "format" : {
+                "type" : "number-plain",
+                "abbreviation" : "compact",
+                "decimalPlaces" : {
+                  "type" : "max",
+                  "places" : 2
+                }
+              },
+              "displayName" : "Count of Unique product_name"
+            }
+          },
+          "frame" : {
+            "showTitle" : true,
+            "title" : "Sales Volume Overview",
+            "showDescription" : true,
+            "description" : "Total Units / Unique Products"
+          }
+        }
+      },
+      "position" : {
+        "x" : 0,
+        "y" : 0,
+        "width" : 1,
+        "height" : 3
+      }
+    }, {
+      "widget" : {
+        "name" : "0f1b5a35",
+        "queries" : [ {
+          "name" : "main_query",
+          "query" : {
+            "datasetName" : "08e661fc",
+            "fields" : [ {
+              "name" : "sum(monthly_product_revenue)",
+              "expression" : "SUM(`monthly_product_revenue`)"
+            } ],
+            "disaggregated" : false
+          }
+        } ],
+        "spec" : {
+          "version" : 2,
+          "widgetType" : "counter",
+          "encodings" : {
+            "value" : {
+              "fieldName" : "sum(monthly_product_revenue)",
+              "format" : {
+                "type" : "number-currency",
+                "currencyCode" : "USD",
+                "abbreviation" : "compact",
+                "decimalPlaces" : {
+                  "type" : "max",
+                  "places" : 2
+                }
+              },
+              "displayName" : "Sum of monthly_product_revenue"
+            }
+          },
+          "frame" : {
+            "showTitle" : true,
+            "title" : "Total Sales Revenue",
+            "showDescription" : true,
+            "description" : "By Select year(s)"
+          }
+        }
+      },
+      "position" : {
+        "x" : 0,
+        "y" : 3,
+        "width" : 1,
+        "height" : 3
+      }
+    } ]
+  } ]
+}
