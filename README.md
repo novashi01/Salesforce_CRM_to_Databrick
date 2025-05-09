@@ -10,7 +10,7 @@ The primary goal is to create reliable, cleaned, and aggregated datasets from co
 
 *   Processes key Salesforce CRM objects (Account, Lead, Opportunity, Opportunity Product, User).
 *   Follows the Medallion Architecture:
-    *   **Bronze:** Raw data landing (Assumed to be populated, e.g., by Fivetran, Airbyte, or custom scripts).
+    *   **Bronze:** Raw data landing.
     *   **Silver:** Cleaned, standardized, and validated base tables.
     *   **Gold:** Aggregated, denormalized, business-centric views ready for analysis.
 *   Utilizes **Delta Live Tables (DLT)** for declarative pipeline definition, data quality enforcement, and dependency management.
@@ -29,20 +29,35 @@ The primary goal is to create reliable, cleaned, and aggregated datasets from co
 
 1.  **Bronze Layer:**
     *   Contains raw data directly reflecting the source Salesforce objects.
-    *   **Assumption:** These tables are populated by a separate process (e.g., Fivetran, Airbyte, custom ingestion scripts) before the DLT pipeline runs. This pipeline *consumes* Bronze data.
+    *   **Assumption:** These tables are populated by a separate process before the DLT pipeline runs. This pipeline *consumes* Bronze data.
 
 2.  **Silver Layer:**
     *   Cleans raw data: casting data types, trimming strings, handling nulls.
-    *   Standardizes column names (e.g., removing spaces, using snake_case).
+    *   Standardizes column names.
     *   Applies basic data quality rules using DLT `EXPECT` constraints.
     *   Creates core entity tables like `silver_account`, `silver_lead`, `silver_opportunity`, etc.
     *   **Output Schema:** Configured in the DLT pipeline settings.
 
 3.  **Gold Layer:**
-    *   Reads from **Silver layer tables** (either using `live.` prefix if in a single pipeline, or physical table names if using segmented pipelines).
+    *   Reads from **Silver layer tables**
     *   Performs aggregations, joins, and denormalization to create business-centric views.
-    *   Examples: `gold_opportunity_snapshot`, `gold_lead_funnel`, `gold_sales_pipeline_agg`.
-    *   **Output Schema:** Configured in the DLT pipeline settings (e.g., `aitest.crm_gold` if using segmented pipelines, or the same target schema as Silver if using a single pipeline, relying on `gold_` prefix for distinction).
+    *   `gold_opportunity_snapshot`: A wide table with one row per opportunity, enriched with account, owner, owner's manager, and aggregated line item data. Powers detailed opportunity analysis.
+    *   `gold_lead_funnel`: Tracks lead progression, conversion details, and potentially the converted account's owner.
+    *   `gold_sales_pipeline_agg`: Aggregates won revenue, deal counts, win rates, etc., by month, manager, owner, industry, and other dimensions.
+    *   `gold_lead_source_agg`: Aggregates lead creation, conversion counts, and rates by month, lead source, etc.
+    *   `gold_monthly_product_sales`: Aggregates product sales revenue and quantity by month and product name.
 
+## Dashboarding
+
+The Gold layer tables are designed to be directly queried by BI tools or Databricks SQL Dashboards to create visualizations such as:
+
+*   Sales Funnel Performance (KPIs for leads created, converted, opportunities won)
+*   Current Pipeline Stage Distribution
+*   Monthly Closed Won Opportunities (Trend)
+*   Monthly Lead Creation vs. Conversion (Trend)
+*   Won vs. Total Closed Deals by Owner (Count & Ratio)
+*   Team Performance by Manager (Revenue)
+*   Revenue Distribution by Customer Industry
+*   Product Contribution to Monthly Revenue
 
 
